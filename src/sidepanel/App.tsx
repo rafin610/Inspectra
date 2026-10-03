@@ -5,7 +5,7 @@ import AgentExploringView from './components/AgentExploringView';
 import IssueCard from './components/IssueCard';
 import ProgressSteps from './components/ProgressSteps';
 import PromptView from './components/PromptView';
-import { SEVERITY_DOT, severityLabel } from './components/severity';
+import { SEVERITY_DOT, SEVERITY_STYLE, severityLabel } from './components/severity';
 import { useScan, type AIStatus, type ScanError } from './hooks/useScan';
 
 type View = 'main' | 'settings';
@@ -35,10 +35,50 @@ const CATEGORY_FILTERS: ('all' | IssueCategory)[] = [
   'cleanup',
 ];
 
+type SidePanelCloser = {
+  close?: (options: { tabId?: number; windowId?: number }) => Promise<void>;
+};
+
+/**
+ * Close dismisses the whole side panel (state is session-scoped, so the
+ * next open initializes normally). Tries the sidePanel.close() API first
+ * (Chrome 141+), then falls back to window.close().
+ * Distinct from Minimize, which keeps the panel open in a compact,
+ * state-preserving bar.
+ */
+async function closeSidePanel(): Promise<void> {
+  try {
+    const sp = chrome.sidePanel as unknown as SidePanelCloser;
+    if (typeof sp.close === 'function') {
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      if (tab?.id !== undefined) {
+        try {
+          await sp.close({ tabId: tab.id });
+          return;
+        } catch {
+          /* tab-scoped close unavailable — try the window scope */
+        }
+      }
+      if (tab?.windowId !== undefined) {
+        try {
+          await sp.close({ windowId: tab.windowId });
+          return;
+        } catch {
+          /* fall through to window.close() */
+        }
+      }
+    }
+  } catch {
+    /* fall through to window.close() */
+  }
+  window.close();
+}
+
 export default function App() {
   const [view, setView] = useState<View>('main');
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all');
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+  const [minimized, setMinimized] = useState(false);
 
   const {
     stage,
@@ -69,6 +109,7 @@ export default function App() {
       if (message.type === 'INSPECTRA_ISSUE_MARKER_CLICK' && message.issueId) {
         setSelectedIssueId(message.issueId);
         setView('main');
+        setMinimized(false);
       }
     };
     chrome.runtime.onMessage.addListener(onMarkerClick);
@@ -95,40 +136,71 @@ export default function App() {
     });
   }, [outcome, filter]);
 
-  const busy = ['reading', 'inspecting', 'layout', 'responsive', 'visual', 'analyzing'].includes(stage);
+  const busy = ['reading', 'inspecting', 'layout', 'responsive', 'visual', 'analyzing', 'exploring'].includes(stage);
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
+    <div className="in-app flex min-h-screen flex-col">
+      {/* Minimized: compact bar only. The full interface stays mounted but
+          hidden, so scan results, forms, and settings drafts are preserved. */}
+      {minimized && (
+        <div className="p-3">
+          <MinimizedBar
+            busy={busy}
+            issueCount={outcome?.audit.issues.length ?? 0}
+            hasOutcome={stage === 'done' && outcome !== null}
+            onRestore={() => setMinimized(false)}
+          />
+        </div>
+      )}
+      <div className={minimized ? 'hidden' : 'contents'}>
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur">
+      <header className="in-header sticky top-0 z-10 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white shadow-sm">
+            <div className="in-btn-primary flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold">
               In
             </div>
             <div>
-              <h1 className="text-sm font-bold leading-tight">Inspectra</h1>
-              <p className="text-[11px] leading-tight text-slate-500">Autonomous Frontend Audit Agent</p>
+              <h1 className="in-title text-sm font-bold leading-tight">Inspectra</h1>
+              <p className="in-caption text-[11px] leading-tight">Autonomous Frontend Audit Agent</p>
             </div>
           </div>
-          <button
-            onClick={() => setView((v) => (v === 'settings' ? 'main' : 'settings'))}
-            className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
-            aria-label="Settings"
-          >
-            {view === 'settings' ? '← Back' : '⚙ Settings'}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setView((v) => (v === 'settings' ? 'main' : 'settings'))}
+              className="in-btn-ghost px-2.5 py-1.5 text-xs font-medium"
+              aria-label="Settings"
+            >
+              {view === 'settings' ? '← Back' : '⚙ Settings'}
+            </button>
+            <button
+              onClick={() => setMinimized(true)}
+              className="in-winbtn"
+              aria-label="Minimize Inspectra"
+              title="Minimize (keeps session state)"
+            >
+              —
+            </button>
+            <button
+              onClick={() => void closeSidePanel()}
+              className="in-winbtn in-winbtn-close"
+              aria-label="Close Inspectra"
+              title="Close panel"
+            >
+              ×
+            </button>
+          </div>
         </div>
         {domain && (
-          <p className="mt-1.5 truncate text-xs text-slate-500">
-            Target: <span className="font-medium text-slate-700">{domain}</span>
+          <p className="in-caption mt-1.5 truncate text-xs">
+            Target: <span className="in-body font-medium">{domain}</span>
           </p>
         )}
       </header>
 
       <main className="flex flex-1 flex-col gap-3 p-4">
         {view === 'settings' ? (
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="in-card rounded-2xl p-4">
             <Settings onChanged={() => refreshTab()} />
           </div>
         ) : stage === 'idle' ? (
@@ -190,11 +262,47 @@ export default function App() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 px-4 py-2">
-        <p className="text-center text-[11px] text-slate-400">
+      <footer className="in-footer px-4 py-2">
+        <p className="text-center text-[11px]">
           Inspectra executes safely in-browser. Keys remain local in Chrome storage.
         </p>
       </footer>
+      </div>
+    </div>
+  );
+}
+
+function MinimizedBar({
+  busy,
+  issueCount,
+  hasOutcome,
+  onRestore,
+}: {
+  busy: boolean;
+  issueCount: number;
+  hasOutcome: boolean;
+  onRestore: () => void;
+}) {
+  return (
+    <div className="in-minibar flex items-center gap-2.5 rounded-xl px-3 py-2.5">
+      <span className="in-pulse-dot h-2 w-2 shrink-0 rounded-full" />
+      <div className="min-w-0 flex-1">
+        <p className="in-title text-xs font-bold leading-tight">Inspectra · Minimized</p>
+        <p className="in-caption truncate text-[11px] leading-tight">
+          {hasOutcome
+            ? `${issueCount} issue(s) ready — state preserved`
+            : busy
+              ? 'Audit running in background…'
+              : 'Session preserved'}
+        </p>
+      </div>
+      <button
+        onClick={onRestore}
+        className="in-btn-ghost shrink-0 px-2.5 py-1.5 text-xs font-semibold"
+        aria-label="Restore Inspectra"
+      >
+        Restore
+      </button>
     </div>
   );
 }
@@ -220,13 +328,13 @@ function IdleView({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm">
-        <h2 className="text-base font-bold text-slate-900">Frontend AI Auditor</h2>
-        <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-slate-500">
+      <div className="in-card rounded-2xl p-5 text-center">
+        <h2 className="in-title text-base font-bold">Frontend AI Auditor</h2>
+        <p className="in-body mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed">
           Autonomous browser agent that explores, tests, and audits your live frontend, then generates a complete fix prompt.
         </p>
         {domain && (
-          <p className="mt-2 inline-block rounded-full bg-slate-100 px-3 py-1 font-mono text-xs text-slate-600">
+          <p className="in-chip mt-2 inline-block rounded-full px-3 py-1 font-mono text-xs">
             {domain}
           </p>
         )}
@@ -234,12 +342,12 @@ function IdleView({
         {/* Active AI selector */}
         {aiStatus.kind === 'ready' && (
           <div className="mx-auto mt-3 max-w-xs text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Active AI Model</p>
+            <p className="in-label">Active AI Model</p>
             {aiStatus.all.length > 1 ? (
               <select
                 value={aiStatus.active.id}
                 onChange={(e) => onSwitch(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 focus:border-indigo-500 focus:outline-none"
+                className="in-input mt-1 text-xs font-medium"
                 aria-label="Active AI provider"
               >
                 {aiStatus.all.map((p) => (
@@ -249,7 +357,7 @@ function IdleView({
                 ))}
               </select>
             ) : (
-              <p className="mt-1 truncate text-xs font-medium text-slate-700">
+              <p className="in-body mt-1 truncate text-xs font-medium">
                 {aiStatus.active.name} — <span className="font-mono">{aiStatus.active.model}</span>
               </p>
             )}
@@ -260,7 +368,7 @@ function IdleView({
         <button
           onClick={onStartAgent}
           disabled={!scannable || aiStatus.kind !== 'ready'}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="in-btn-primary mt-4 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm"
         >
           <span>🤖</span>
           <span>Start Autonomous Agent Audit</span>
@@ -270,24 +378,24 @@ function IdleView({
         <button
           onClick={onQuickScan}
           disabled={!scannable || aiStatus.kind !== 'ready'}
-          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+          className="in-btn-ghost mt-2 w-full px-4 py-2 text-xs font-medium"
         >
           Run Quick Single-Viewport Scan
         </button>
 
         {!scannable && (
-          <p className="mt-2 text-xs leading-relaxed text-amber-600">
+          <p className="mt-2 text-xs leading-relaxed text-[var(--in-warn)]">
             This page cannot be scanned by Chrome extensions.
           </p>
         )}
       </div>
 
       {scannable && aiStatus.kind === 'none' && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-          <p className="text-sm font-medium text-amber-800">No AI provider configured.</p>
+        <div className="in-notice-warn rounded-xl p-4 text-center">
+          <p className="in-title text-sm font-medium">No AI provider configured.</p>
           <button
             onClick={onSettings}
-            className="mt-2 rounded-lg border border-amber-300 bg-white px-4 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            className="in-btn-ghost mt-2 px-4 py-1.5 text-xs font-semibold"
           >
             Configure AI Provider
           </button>
@@ -295,16 +403,16 @@ function IdleView({
       )}
 
       {scannable && aiStatus.kind === 'incomplete' && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
+        <div className="in-notice-warn rounded-xl p-4 text-center">
           {aiStatus.blockers.map((b) => (
-            <p key={b} className="text-sm font-medium text-amber-800">
+            <p key={b} className="in-title text-sm font-medium">
               {b}
             </p>
           ))}
-          <p className="mt-1 text-xs text-amber-700">Please open Settings and complete the configuration.</p>
+          <p className="in-body mt-1 text-xs">Please open Settings and complete the configuration.</p>
           <button
             onClick={onSettings}
-            className="mt-2 rounded-lg border border-amber-300 bg-white px-4 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+            className="in-btn-ghost mt-2 px-4 py-1.5 text-xs font-semibold"
           >
             Open Settings
           </button>
@@ -367,21 +475,21 @@ function ResultsView(props: {
   return (
     <div className="flex flex-col gap-3">
       {/* Summary card */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="in-card rounded-2xl p-4">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Audit Summary</p>
+          <p className="in-label">Audit Summary</p>
           <p
-            className="max-w-[60%] truncate text-[11px] text-slate-400"
+            className="in-caption max-w-[60%] truncate text-[11px]"
             title={`${props.providerName} · ${props.model}`}
           >
             {props.providerName} · <span className="font-mono">{props.model}</span>
           </p>
         </div>
 
-        <p className="mt-1 text-sm leading-relaxed text-slate-800">{props.summary}</p>
+        <p className="in-title mt-1 text-sm leading-relaxed">{props.summary}</p>
 
         {props.overall && props.overall !== props.summary && (
-          <p className="mt-2 border-t border-slate-100 pt-2 text-[13px] leading-relaxed text-slate-600">
+          <p className="in-body mt-2 border-t in-divider pt-2 text-[13px] leading-relaxed">
             {props.overall}
           </p>
         )}
@@ -392,7 +500,7 @@ function ResultsView(props: {
             props.counts[s] ? (
               <span
                 key={s}
-                className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700"
+                className="in-chip inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${SEVERITY_DOT[s]}`} />
                 {severityLabel(s)}: {props.counts[s]}
@@ -401,7 +509,7 @@ function ResultsView(props: {
           )}
 
           {props.totalIssues === 0 && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+            <span className="in-notice-ok rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-[var(--in-ok)]">
               ✓ Clean frontend: no meaningful defects found
             </span>
           )}
@@ -409,16 +517,16 @@ function ResultsView(props: {
 
         {/* Stats Row */}
         {props.statesVisited && props.statesVisited.length > 0 && (
-          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+          <div className="in-body mt-3 flex items-center justify-between border-t in-divider pt-2 text-[11px]">
             <span>
-              States explored: <strong>{props.statesVisited.length}</strong>
+              States explored: <strong className="in-title">{props.statesVisited.length}</strong>
             </span>
             <span>
-              Interactions tested: <strong>{props.timeline?.length ?? 0}</strong>
+              Interactions tested: <strong className="in-title">{props.timeline?.length ?? 0}</strong>
             </span>
             <button
               onClick={() => setShowTimeline((t) => !t)}
-              className="font-medium text-indigo-600 hover:text-indigo-800"
+              className="in-link text-[11px]"
             >
               {showTimeline ? 'Hide Timeline' : 'View Exploration'}
             </button>
@@ -428,22 +536,22 @@ function ResultsView(props: {
 
       {/* Exploration Timeline Drawer */}
       {showTimeline && props.timeline && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+        <div className="in-card flex flex-col gap-2 rounded-2xl p-3.5">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">Exploration Timeline</h3>
-            <span className="text-[11px] text-slate-400">{props.timeline.length} actions</span>
+            <h3 className="in-body text-xs font-bold uppercase tracking-wider">Exploration Timeline</h3>
+            <span className="in-caption text-[11px]">{props.timeline.length} actions</span>
           </div>
           <div className="flex max-h-56 flex-col gap-1.5 overflow-y-auto pr-1">
             {props.timeline.map((step, idx) => (
-              <div key={idx} className="flex items-start gap-2 rounded-lg bg-slate-50 p-2 text-xs">
-                <span className="mt-0.5 shrink-0 rounded bg-slate-200 px-1.5 py-0.5 font-mono text-[9px] font-bold">
+              <div key={idx} className="in-muted-box flex items-start gap-2 rounded-lg p-2 text-xs">
+                <span className="in-code mt-0.5 shrink-0 rounded px-1.5 py-0.5 font-mono text-[9px] font-bold uppercase">
                   {step.action.action}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-slate-800">{step.description}</p>
-                  <p className="font-mono text-[10px] text-slate-400">{step.stateId}</p>
+                  <p className="in-title truncate">{step.description}</p>
+                  <p className="in-caption font-mono text-[10px]">{step.stateId}</p>
                 </div>
-                <span>{step.result?.success ? '✓' : '•'}</span>
+                <span className="in-caption">{step.result?.success ? '✓' : '•'}</span>
               </div>
             ))}
           </div>
@@ -458,9 +566,7 @@ function ResultsView(props: {
               key={f}
               onClick={() => props.setFilter(f)}
               className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                props.filter === f
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:text-slate-900'
+                props.filter === f ? 'in-filter-active' : 'in-filter-idle'
               }`}
             >
               {f === 'all'
@@ -473,16 +579,16 @@ function ResultsView(props: {
 
       {/* Markers & Category Bar */}
       {props.totalIssues > 0 && (
-        <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="in-card flex flex-col gap-2 rounded-2xl p-3">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-slate-700">
+            <span className="in-body text-xs font-semibold">
               {markersVisible
                 ? `${filteredIssues.filter((i) => i.selector).length} mapped markers`
                 : 'Markers hidden'}
             </span>
             <button
               onClick={() => setMarkersVisible((v) => !v)}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:border-slate-300"
+              className="in-btn-ghost px-2.5 py-1 text-[11px] font-semibold"
             >
               {markersVisible ? 'Hide Markers' : 'Show Markers'}
             </button>
@@ -494,9 +600,7 @@ function ResultsView(props: {
                 key={category}
                 onClick={() => setCategoryFilter(category)}
                 className={`rounded-full px-2 py-1 text-[10px] font-semibold capitalize ${
-                  categoryFilter === category
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  categoryFilter === category ? 'in-filter-active' : 'in-chip-btn'
                 }`}
               >
                 {category === 'all' ? 'All categories' : category}
@@ -506,48 +610,48 @@ function ResultsView(props: {
 
           {/* Focused Issue Highlight */}
           {selectedIssue && (
-            <div className="border-t border-slate-100 pt-2">
+            <div className="border-t in-divider pt-2">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-slate-500">
+                <span className="in-caption text-[11px] font-semibold">
                   Issue {selectedIndex + 1} of {filteredIssues.length}
                 </span>
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => navigateIssue(-1)}
-                    className="rounded border border-slate-200 px-2 py-0.5 text-xs hover:bg-slate-50"
+                    className="in-btn-ghost px-2 py-0.5 text-xs"
                   >
                     ← Prev
                   </button>
                   <button
                     onClick={() => navigateIssue(1)}
-                    className="rounded border border-slate-200 px-2 py-0.5 text-xs hover:bg-slate-50"
+                    className="in-btn-ghost px-2 py-0.5 text-xs"
                   >
                     Next →
                   </button>
                 </div>
               </div>
 
-              <div id="inspectra-selected-issue" className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+              <div id="inspectra-selected-issue" className="in-notice-info rounded-xl p-3">
                 <div className="flex items-center gap-2">
-                  <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                  <span className={`${SEVERITY_STYLE[selectedIssue.severity]}`}>
                     {severityLabel(selectedIssue.severity)}
                   </span>
-                  <span className="text-[10px] font-semibold uppercase text-slate-500">
+                  <span className="in-caption text-[10px] font-semibold uppercase">
                     {selectedIssue.category}
                   </span>
-                  <span className="ml-auto text-[10px] font-semibold text-slate-500">
+                  <span className="in-caption ml-auto text-[10px] font-semibold">
                     {Math.round(selectedIssue.confidence * 100)}% conf
                   </span>
                 </div>
 
-                <h3 className="mt-2 text-sm font-bold text-slate-900">
+                <h3 className="in-title mt-2 text-sm font-bold">
                   {selectedIssue.title || selectedIssue.problem}
                 </h3>
 
                 {selectedIssue.selector ? (
-                  <p className="mt-1 break-all font-mono text-[10px] text-slate-500">{selectedIssue.selector}</p>
+                  <p className="in-caption mt-1 break-all font-mono text-[10px]">{selectedIssue.selector}</p>
                 ) : (
-                  <p className="mt-1 text-[11px] text-slate-500">Visual observation (mapping unavailable)</p>
+                  <p className="in-caption mt-1 text-[11px]">Visual observation (mapping unavailable)</p>
                 )}
 
                 <DetailField label="Evidence" value={selectedIssue.evidence} />
@@ -558,7 +662,7 @@ function ResultsView(props: {
                 {selectedIssue.selector && (
                   <button
                     onClick={() => props.onFocusIssue(selectedIssue)}
-                    className="mt-3 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                    className="in-btn-primary mt-3 px-3 py-1.5 text-xs"
                   >
                     Focus on Page
                   </button>
@@ -576,7 +680,7 @@ function ResultsView(props: {
         ))}
 
         {props.totalIssues > 0 && filteredIssues.length === 0 && (
-          <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">
+          <p className="in-caption rounded-xl border border-dashed in-divider p-4 text-center text-xs">
             No issues match these filters.
           </p>
         )}
@@ -584,15 +688,15 @@ function ResultsView(props: {
 
       {/* Cleanup Suggestions */}
       {props.cleanup.length > 0 && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50/60 p-4">
-          <p className="text-sm font-bold text-purple-900">Potential Cleanup Candidates</p>
-          <p className="text-xs text-purple-700/80">Verify business purpose before removing.</p>
+        <div className="rounded-xl p-4" style={{ border: '1px solid rgba(167,139,250,0.35)', background: 'rgba(167,139,250,0.06)' }}>
+          <p className="text-sm font-bold text-[#c4b0f7]">Potential Cleanup Candidates</p>
+          <p className="text-xs text-[#9d8bd4]">Verify business purpose before removing.</p>
           <div className="mt-2 flex flex-col gap-2">
             {props.cleanup.map((c) => (
-              <div key={c.id} className="rounded-lg bg-white p-3 ring-1 ring-purple-100">
-                <p className="font-mono text-[11px] text-purple-800">{c.element}</p>
-                <p className="mt-1 text-[13px] text-slate-700">{c.reason}</p>
-                <p className="mt-1 text-[13px] text-slate-500">{c.recommendation}</p>
+              <div key={c.id} className="in-card rounded-lg p-3">
+                <p className="font-mono text-[11px] text-[#c4b0f7]">{c.element}</p>
+                <p className="in-body mt-1 text-[13px]">{c.reason}</p>
+                <p className="in-caption mt-1 text-[13px]">{c.recommendation}</p>
               </div>
             ))}
           </div>
@@ -608,8 +712,8 @@ function ResultsView(props: {
 function DetailField({ label, value }: { label: string; value: string }) {
   return (
     <div className="mt-2">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-0.5 text-xs leading-relaxed text-slate-700">{value}</p>
+      <p className="in-caption text-[10px] font-bold uppercase tracking-wide">{label}</p>
+      <p className="in-body mt-0.5 text-xs leading-relaxed">{value}</p>
     </div>
   );
 }
@@ -629,22 +733,22 @@ function ErrorView({
 }) {
   const isBlocker = error.kind === 'blockers';
   return (
-    <div className="rounded-2xl border border-red-200 bg-white p-5 text-center shadow-sm">
+    <div className="in-card rounded-2xl p-5 text-center">
       <p className="text-2xl">⚠️</p>
-      <h2 className="mt-1 text-sm font-bold text-slate-900">Audit Didn't Complete</h2>
+      <h2 className="in-title mt-1 text-sm font-bold">Audit Didn't Complete</h2>
 
       {error.kind === 'message' && (
-        <p className="mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed text-slate-600">{error.message}</p>
+        <p className="in-body mx-auto mt-1.5 max-w-xs text-[13px] leading-relaxed">{error.message}</p>
       )}
 
       {error.kind === 'blockers' && (
         <div className="mx-auto mt-1.5 max-w-xs">
           {error.blockers.map((b) => (
-            <p key={b} className="text-[13px] font-medium leading-relaxed text-slate-700">
+            <p key={b} className="in-title text-[13px] font-medium leading-relaxed">
               {b}
             </p>
           ))}
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="in-caption mt-1 text-xs">
             {error.hasProviders
               ? 'Please open Settings and complete the configuration.'
               : 'Please configure an AI provider and model before starting an audit.'}
@@ -653,16 +757,16 @@ function ErrorView({
       )}
 
       {error.kind === 'ai' && (
-        <div className="mx-auto mt-2 max-w-xs rounded-xl bg-slate-50 p-3 text-left">
-          <p className="text-xs text-slate-500">
-            Provider: <span className="font-semibold text-slate-800">{error.info.providerName}</span>
+        <div className="in-well mx-auto mt-2 max-w-xs rounded-xl p-3 text-left">
+          <p className="in-caption text-xs">
+            Provider: <span className="in-title font-semibold">{error.info.providerName}</span>
           </p>
-          <p className="mt-0.5 font-mono text-xs text-slate-500">
-            Model: <span className="font-semibold text-slate-800">{error.info.model || '(none)'}</span>
+          <p className="in-caption mt-0.5 font-mono text-xs">
+            Model: <span className="in-title font-semibold">{error.info.model || '(none)'}</span>
           </p>
-          <p className="mt-2 text-[13px] font-medium leading-relaxed text-slate-800">Error: {error.info.reason}</p>
-          <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Possible solutions</p>
-          <ul className="mt-1 list-disc pl-4 text-left text-xs leading-relaxed text-slate-600">
+          <p className="in-title mt-2 text-[13px] font-medium leading-relaxed">Error: {error.info.reason}</p>
+          <p className="in-caption mt-2 text-xs font-semibold uppercase tracking-wide">Possible solutions</p>
+          <ul className="in-body mt-1 list-disc pl-4 text-left text-xs leading-relaxed">
             {error.info.solutions.map((s) => (
               <li key={s}>{s}</li>
             ))}
@@ -675,7 +779,7 @@ function ErrorView({
           <>
             <button
               onClick={onSettings}
-              className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700"
+              className="in-btn-primary flex-1 px-4 py-2.5 text-sm"
             >
               Open Settings
             </button>
@@ -683,7 +787,7 @@ function ErrorView({
               <button
                 onClick={onRetry}
                 disabled={!scannable}
-                className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-300 disabled:bg-slate-100"
+                className="in-btn-ghost px-4 py-2.5 text-sm font-medium"
               >
                 Retry
               </button>
@@ -693,7 +797,7 @@ function ErrorView({
           <button
             onClick={onRetry}
             disabled={!scannable}
-            className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:bg-slate-300"
+            className="in-btn-primary flex-1 px-4 py-2.5 text-sm"
           >
             Try Again
           </button>
@@ -701,7 +805,7 @@ function ErrorView({
       </div>
 
       {!scannable && (
-        <p className="mt-2 text-xs text-amber-600">This page cannot be scanned by Chrome extensions.</p>
+        <p className="mt-2 text-xs text-[var(--in-warn)]">This page cannot be scanned by Chrome extensions.</p>
       )}
     </div>
   );

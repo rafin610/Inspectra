@@ -1,23 +1,23 @@
 import type { IssueSeverity } from '../../shared/types';
 
 export const SEVERITY_STYLE: Record<IssueSeverity, string> = {
-  critical: 'bg-red-100 text-red-700 border-red-200',
-  major: 'bg-orange-100 text-orange-700 border-orange-200',
-  important: 'bg-orange-100 text-orange-700 border-orange-200',
-  minor: 'bg-amber-100 text-amber-700 border-amber-200',
-  suggestion: 'bg-blue-100 text-blue-700 border-blue-200',
-  improvement: 'bg-blue-100 text-blue-700 border-blue-200',
-  'potential-cleanup': 'bg-purple-100 text-purple-700 border-purple-200',
+  critical: 'in-sev in-sev-critical',
+  major: 'in-sev in-sev-major',
+  important: 'in-sev in-sev-major',
+  minor: 'in-sev in-sev-minor',
+  suggestion: 'in-sev in-sev-suggestion',
+  improvement: 'in-sev in-sev-suggestion',
+  'potential-cleanup': 'in-sev in-sev-cleanup',
 };
 
 export const SEVERITY_DOT: Record<IssueSeverity, string> = {
-  critical: 'bg-red-500',
-  major: 'bg-orange-500',
-  important: 'bg-orange-500',
-  minor: 'bg-amber-500',
-  suggestion: 'bg-blue-500',
-  improvement: 'bg-blue-500',
-  'potential-cleanup': 'bg-purple-500',
+  critical: 'bg-red-400',
+  major: 'bg-orange-400',
+  important: 'bg-orange-400',
+  minor: 'bg-amber-300',
+  suggestion: 'bg-sky-400',
+  improvement: 'bg-sky-400',
+  'potential-cleanup': 'bg-violet-400',
 };
 
 export function severityLabel(s: IssueSeverity): string {

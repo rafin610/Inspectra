@@ -24,28 +24,26 @@ export default function PromptView({ prompt, onScanAgain }: { prompt: string; on
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white">
+    <div className="in-card rounded-xl">
       <div className="flex items-center justify-between px-3.5 pt-3">
-        <p className="text-sm font-bold text-slate-900">AI Fix Prompt</p>
-        <span className="text-[11px] text-slate-400">{prompt.length.toLocaleString()} chars</span>
+        <p className="in-title text-sm font-bold">AI Fix Prompt</p>
+        <span className="in-caption text-[11px]">{prompt.length.toLocaleString()} chars</span>
       </div>
       <div className="px-3.5 py-2.5">
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-950 p-3 font-mono text-[11px] leading-relaxed text-slate-100">
+        <pre className="in-code max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-lg p-3 font-mono text-[11px] leading-relaxed">
           {prompt}
         </pre>
       </div>
       <div className="flex gap-2 px-3.5 pb-3.5">
         <button
           onClick={copy}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-colors ${
-            copied ? 'bg-emerald-600' : 'bg-indigo-600 hover:bg-indigo-700'
-          }`}
+          className={`flex-1 px-4 py-2.5 text-sm transition-colors ${copied ? 'in-btn-ok' : 'in-btn-primary'}`}
         >
           {copied ? '✓ Prompt copied' : 'Copy Prompt'}
         </button>
         <button
           onClick={onScanAgain}
-          className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+          className="in-btn-ghost px-4 py-2.5 text-sm font-medium"
         >
           Scan Again
         </button>

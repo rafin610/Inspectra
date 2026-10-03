@@ -12,9 +12,8 @@ import {
   setIncludeScreenshot,
 } from './storage';
 
-const inputCls =
-  'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500';
-const labelCls = 'mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500';
+const inputCls = 'in-input';
+const labelCls = 'in-label mb-1.5 block';
 
 type ProviderChoice = 'gemini' | 'openai' | 'openrouter' | 'custom';
 
@@ -43,7 +42,7 @@ export default function Settings({ onChanged }: { onChanged?: () => void }) {
   }
 
   if (!store) {
-    return <p className="py-6 text-center text-sm text-slate-400">Loading providers…</p>;
+    return <p className="in-caption py-6 text-center text-sm">Loading providers…</p>;
   }
 
   if (mode === 'list') {
@@ -116,25 +115,26 @@ function ProviderChoiceView({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-slate-900">Add AI Provider</h2>
-        <button onClick={onCancel} className="text-xs font-medium text-slate-500 hover:text-slate-900">
+        <h2 className="in-title text-sm font-bold">Add AI Provider</h2>
+        <button onClick={onCancel} className="in-body text-xs font-medium hover:text-[var(--in-text)]">
           ← Back
         </button>
       </div>
-      <p className="text-sm text-slate-600">Choose your AI provider</p>
+      <p className="in-body text-sm">Choose your AI provider</p>
       <div className="grid gap-2">
         {PROVIDER_CHOICES.map((provider) => (
           <button
             key={provider.key}
             type="button"
             onClick={() => onSelect(provider.key)}
-            className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50"
+            className="in-card flex w-full items-center justify-between rounded-xl p-3 text-left transition-colors hover:border-[var(--in-accent)]"
+            style={{ transition: 'border-color 120ms' }}
           >
             <div>
-              <div className="text-sm font-semibold text-slate-900">{provider.name}</div>
-              <div className="text-xs text-slate-500">{provider.kind}</div>
+              <div className="in-title text-sm font-semibold">{provider.name}</div>
+              <div className="in-body text-xs">{provider.kind}</div>
             </div>
-            <div className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="in-chip rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide">
               {provider.summary}
             </div>
           </button>
@@ -171,21 +171,22 @@ function ProviderList({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-slate-900">AI Providers</h2>
-        <span className="text-xs text-slate-400">{store.providers.length} saved</span>
+        <h2 className="in-title text-sm font-bold">AI Providers</h2>
+        <span className="in-caption text-xs">{store.providers.length} saved</span>
       </div>
 
       <button
         onClick={onAdd}
-        className="w-full rounded-xl border-2 border-dashed border-slate-300 px-4 py-3 text-sm font-semibold text-slate-600 transition-colors hover:border-indigo-400 hover:text-indigo-700"
+        className="in-btn-ghost w-full border-dashed px-4 py-3 text-sm font-semibold"
+        style={{ borderStyle: 'dashed' }}
       >
         + Add AI Provider
       </button>
 
       {store.providers.length === 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center">
-          <p className="text-sm font-medium text-amber-800">No AI provider configured.</p>
-          <p className="mt-1 text-xs text-amber-700">Choose a provider and add your API key to get started.</p>
+        <div className="in-notice-warn rounded-xl p-4 text-center">
+          <p className="in-title text-sm font-medium">No AI provider configured.</p>
+          <p className="in-body mt-1 text-xs">Choose a provider and add your API key to get started.</p>
         </div>
       )}
 
@@ -196,22 +197,22 @@ function ProviderList({
         return (
           <div
             key={provider.id}
-            className={`rounded-xl border bg-white p-3.5 ${isActive ? 'border-indigo-500 ring-1 ring-indigo-500' : 'border-slate-200'}`}
+            className={`in-card rounded-xl p-3.5 ${isActive ? 'in-card-active' : ''}`}
           >
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="truncate text-sm font-bold text-slate-900">{provider.name || 'Untitled provider'}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
+                <p className="in-title truncate text-sm font-bold">{provider.name || 'Untitled provider'}</p>
+                <p className="in-body mt-0.5 text-xs">
                   {label} · Model: <span className="font-mono">{provider.model || 'not set'}</span>
                 </p>
-                <p className="mt-0.5 text-xs text-slate-400">Key: {provider.apiKey ? maskKey(provider.apiKey) : 'not set'}</p>
+                <p className="in-caption mt-0.5 text-xs">Key: {provider.apiKey ? maskKey(provider.apiKey) : 'not set'}</p>
               </div>
               {isActive ? (
-                <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                <span className="in-notice-ok shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold text-[var(--in-ok)]">
                   ✓ Active
                 </span>
               ) : (
-                <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">
+                <span className="in-chip shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold">
                   ● Not active
                 </span>
               )}
@@ -220,20 +221,20 @@ function ProviderList({
               {!isActive && (
                 <button
                   onClick={() => handleUse(provider.id)}
-                  className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700"
+                  className="in-btn-primary px-3 py-1.5 text-xs"
                 >
                   Use
                 </button>
               )}
               <button
                 onClick={() => onEdit(provider.id)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-slate-300 hover:text-slate-900"
+                className="in-btn-ghost px-3 py-1.5 text-xs font-medium"
               >
                 Edit
               </button>
               <button
                 onClick={() => handleDelete(provider.id, provider.name || 'Untitled provider')}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-red-300 hover:text-red-600"
+                className="in-btn-danger-ghost px-3 py-1.5 text-xs font-medium"
               >
                 Remove
               </button>
@@ -242,10 +243,10 @@ function ProviderList({
         );
       })}
 
-      <label className="flex cursor-pointer items-center justify-between rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
-        <span className="text-sm text-slate-700">
+      <label className="in-card flex cursor-pointer items-center justify-between rounded-xl px-3.5 py-2.5">
+        <span className="in-body text-sm">
           Include screenshot
-          <span className="block text-xs text-slate-500">Attach a downscaled page image with the audit.</span>
+          <span className="in-caption block text-xs">Attach a downscaled page image with the audit.</span>
         </span>
         <input
           type="checkbox"
@@ -254,12 +255,12 @@ function ProviderList({
             await setIncludeScreenshot(e.target.checked);
             await onChanged();
           }}
-          className="h-4 w-4 accent-indigo-600"
+          className="in-check h-4 w-4"
         />
       </label>
 
       {active && (
-        <p className="rounded-lg bg-slate-100 px-3 py-2 text-xs text-slate-600">
+        <p className="in-muted-box rounded-lg px-3 py-2 text-xs">
           Using <span className="font-semibold">{active.name}</span> · <span className="font-mono">{active.model || '(no model set)'}</span>
         </p>
       )}
@@ -353,8 +354,8 @@ function ProviderForm({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-slate-900">{initial ? 'Edit AI Provider' : defaultName(choice)}</h2>
-        <button onClick={onCancel} className="text-xs font-medium text-slate-500 hover:text-slate-900">
+        <h2 className="in-title text-sm font-bold">{initial ? 'Edit AI Provider' : defaultName(choice)}</h2>
+        <button onClick={onCancel} className="in-body text-xs font-medium hover:text-[var(--in-text)]">
           ← Back to list
         </button>
       </div>
@@ -396,7 +397,7 @@ function ProviderForm({
             placeholder="https://..."
             autoComplete="off"
             spellCheck={false}
-            className={`${inputCls} font-mono`}
+            className="in-input in-input-mono"
           />
         </div>
       )}
@@ -405,10 +406,10 @@ function ProviderForm({
         <label className={labelCls}>API Key</label>
         {hasStoredKey && !replacingKey ? (
           <div className="flex items-center gap-2">
-            <input value={maskKey('x')} disabled className={`${inputCls} font-mono`} aria-label="Saved API key (hidden)" />
+            <input value={maskKey('x')} disabled className="in-input in-input-mono" aria-label="Saved API key (hidden)" />
             <button
               onClick={() => setReplacingKey(true)}
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:border-slate-300"
+              className="in-btn-ghost shrink-0 px-3 py-2 text-xs font-medium"
             >
               Replace Key
             </button>
@@ -417,7 +418,7 @@ function ProviderForm({
                 setHasStoredKey(false);
                 setKeyInput('');
               }}
-              className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:border-red-300 hover:text-red-600"
+              className="in-btn-danger-ghost shrink-0 px-3 py-2 text-xs font-medium"
             >
               Remove Key
             </button>
@@ -444,12 +445,12 @@ function ProviderForm({
             placeholder="Select or type a model"
             autoComplete="off"
             spellCheck={false}
-            className={`${inputCls} font-mono`}
+            className="in-input in-input-mono"
           />
           <button
             onClick={handleFetchModels}
             disabled={fetchState === 'loading'}
-            className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:border-indigo-400 hover:text-indigo-700 disabled:opacity-50"
+            className="in-btn-ghost shrink-0 px-3 py-2 text-xs font-semibold disabled:opacity-50"
           >
             {fetchState === 'loading' ? 'Loading…' : 'Refresh Models'}
           </button>
@@ -462,21 +463,22 @@ function ProviderForm({
             ))}
           </select>
         )}
-        {fetchMsg && <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{fetchMsg}</p>}
+        {fetchMsg && <p className="in-caption mt-1.5 text-xs leading-relaxed">{fetchMsg}</p>}
       </div>
 
       <div className="flex flex-col gap-2">
         <button
           onClick={handleTest}
           disabled={testState === 'loading'}
-          className="w-full rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+          className="in-btn-ghost w-full px-4 py-2 text-sm font-semibold disabled:opacity-50"
+          style={{ borderColor: 'rgba(111,150,232,0.45)', background: 'var(--in-accent-wash)', color: 'var(--in-accent-hover)' }}
         >
           {testState === 'loading' ? 'Testing…' : 'Test Connection'}
         </button>
         {testMsg && (
           <p
             className={`rounded-lg px-3 py-2 text-xs leading-relaxed ${
-              testState === 'ok' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+              testState === 'ok' ? 'in-notice-ok text-[var(--in-ok)]' : 'in-notice-error text-[var(--in-danger)]'
             }`}
           >
             {testMsg}
@@ -484,17 +486,17 @@ function ProviderForm({
         )}
       </div>
 
-      {formError && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{formError}</p>}
+      {formError && <p className="in-notice-error rounded-lg px-3 py-2 text-xs text-[var(--in-danger)]">{formError}</p>}
 
       <div className="flex gap-2">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+          className="in-btn-primary flex-1 px-4 py-2.5 text-sm disabled:opacity-50"
         >
           {saving ? 'Saving…' : initial ? 'Save Provider' : 'Save Provider'}
         </button>
-        <button onClick={onCancel} className="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 hover:border-slate-300">
+        <button onClick={onCancel} className="in-btn-ghost px-4 py-2.5 text-sm font-medium">
           Cancel
         </button>
       </div>
