@@ -7,8 +7,41 @@ import ProgressSteps from './components/ProgressSteps';
 import PromptView from './components/PromptView';
 import { SEVERITY_DOT, SEVERITY_STYLE, severityLabel } from './components/severity';
 import { useScan, type AIStatus, type ScanError } from './hooks/useScan';
+import { MSG_CLOSE_OVERLAY, MSG_MINIMIZE_OVERLAY } from '../shared/messages';
 
 type View = 'main' | 'settings';
+
+/**
+ * Close asks the page's content script to remove the overlay host.
+ *
+ * The Inspectra UI runs inside a cross-origin iframe, so it cannot remove
+ * its own overlay DOM directly. The content script owns the overlay and
+ * is the only context that can detach it cleanly. We send it a message and
+ * it removes #inspectra-floating-overlay-host.
+ */
+function sendOverlayMessage(type: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ type }, (response?: { ok?: boolean; removed?: boolean }) => {
+        if (chrome.runtime.lastError) {
+          resolve(false);
+          return;
+        }
+        resolve(response?.ok ?? false);
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+function closeOverlay(): Promise<boolean> {
+  return sendOverlayMessage(MSG_CLOSE_OVERLAY);
+}
+
+function minimizeOverlay(): Promise<boolean> {
+  return sendOverlayMessage(MSG_MINIMIZE_OVERLAY);
+}
 
 const FILTERS: ('all' | IssueSeverity)[] = [
   'all',
@@ -35,50 +68,11 @@ const CATEGORY_FILTERS: ('all' | IssueCategory)[] = [
   'cleanup',
 ];
 
-type SidePanelCloser = {
-  close?: (options: { tabId?: number; windowId?: number }) => Promise<void>;
-};
-
-/**
- * Close dismisses the whole side panel (state is session-scoped, so the
- * next open initializes normally). Tries the sidePanel.close() API first
- * (Chrome 141+), then falls back to window.close().
- * Distinct from Minimize, which keeps the panel open in a compact,
- * state-preserving bar.
- */
-async function closeSidePanel(): Promise<void> {
-  try {
-    const sp = chrome.sidePanel as unknown as SidePanelCloser;
-    if (typeof sp.close === 'function') {
-      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-      if (tab?.id !== undefined) {
-        try {
-          await sp.close({ tabId: tab.id });
-          return;
-        } catch {
-          /* tab-scoped close unavailable — try the window scope */
-        }
-      }
-      if (tab?.windowId !== undefined) {
-        try {
-          await sp.close({ windowId: tab.windowId });
-          return;
-        } catch {
-          /* fall through to window.close() */
-        }
-      }
-    }
-  } catch {
-    /* fall through to window.close() */
-  }
-  window.close();
-}
-
 export default function App() {
   const [view, setView] = useState<View>('main');
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all');
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
-  const [minimized, setMinimized] = useState(false);
+
 
   const {
     stage,
@@ -109,7 +103,6 @@ export default function App() {
       if (message.type === 'INSPECTRA_ISSUE_MARKER_CLICK' && message.issueId) {
         setSelectedIssueId(message.issueId);
         setView('main');
-        setMinimized(false);
       }
     };
     chrome.runtime.onMessage.addListener(onMarkerClick);
@@ -140,19 +133,6 @@ export default function App() {
 
   return (
     <div className="in-app flex min-h-screen flex-col">
-      {/* Minimized: compact bar only. The full interface stays mounted but
-          hidden, so scan results, forms, and settings drafts are preserved. */}
-      {minimized && (
-        <div className="p-3">
-          <MinimizedBar
-            busy={busy}
-            issueCount={outcome?.audit.issues.length ?? 0}
-            hasOutcome={stage === 'done' && outcome !== null}
-            onRestore={() => setMinimized(false)}
-          />
-        </div>
-      )}
-      <div className={minimized ? 'hidden' : 'contents'}>
       {/* Header */}
       <header className="in-header sticky top-0 z-10 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between">
@@ -174,7 +154,7 @@ export default function App() {
               {view === 'settings' ? '← Back' : '⚙ Settings'}
             </button>
             <button
-              onClick={() => setMinimized(true)}
+              onClick={() => { void minimizeOverlay(); }}
               className="in-winbtn"
               aria-label="Minimize Inspectra"
               title="Minimize (keeps session state)"
@@ -182,7 +162,7 @@ export default function App() {
               —
             </button>
             <button
-              onClick={() => void closeSidePanel()}
+              onClick={() => { void closeOverlay(); }}
               className="in-winbtn in-winbtn-close"
               aria-label="Close Inspectra"
               title="Close panel"
@@ -267,45 +247,11 @@ export default function App() {
           Inspectra executes safely in-browser. Keys remain local in Chrome storage.
         </p>
       </footer>
-      </div>
     </div>
   );
 }
 
-function MinimizedBar({
-  busy,
-  issueCount,
-  hasOutcome,
-  onRestore,
-}: {
-  busy: boolean;
-  issueCount: number;
-  hasOutcome: boolean;
-  onRestore: () => void;
-}) {
-  return (
-    <div className="in-minibar flex items-center gap-2.5 rounded-xl px-3 py-2.5">
-      <span className="in-pulse-dot h-2 w-2 shrink-0 rounded-full" />
-      <div className="min-w-0 flex-1">
-        <p className="in-title text-xs font-bold leading-tight">Inspectra · Minimized</p>
-        <p className="in-caption truncate text-[11px] leading-tight">
-          {hasOutcome
-            ? `${issueCount} issue(s) ready — state preserved`
-            : busy
-              ? 'Audit running in background…'
-              : 'Session preserved'}
-        </p>
-      </div>
-      <button
-        onClick={onRestore}
-        className="in-btn-ghost shrink-0 px-2.5 py-1.5 text-xs font-semibold"
-        aria-label="Restore Inspectra"
-      >
-        Restore
-      </button>
-    </div>
-  );
-}
+
 
 /* ── Idle View ───────────────────────────────────────────────────────────── */
 

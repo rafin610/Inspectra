@@ -1,7 +1,11 @@
 // Background lifecycle for the floating overlay experience.
 // The page overlay stays inside the web page; the toolbar button only toggles it.
 
-import { MSG_TOGGLE_OVERLAY, isScannableUrl } from '../shared/messages';
+import { MSG_TOGGLE_OVERLAY, MSG_CLOSE_OVERLAY, MSG_MINIMIZE_OVERLAY, MSG_RESTORE_OVERLAY, isScannableUrl } from '../shared/messages';
+
+/** Messages that the iframe sends via chrome.runtime.sendMessage and that
+ *  must be relayed to the active tab's content script (overlay.ts). */
+const RELAY_TYPES = new Set([MSG_CLOSE_OVERLAY, MSG_MINIMIZE_OVERLAY, MSG_RESTORE_OVERLAY]);
 
 export function registerLifecycle() {
   chrome.runtime.onInstalled.addListener((details) => {
@@ -36,4 +40,26 @@ export function registerLifecycle() {
       /* ignore */
     }
   });
+
+  // Relay overlay control messages from the iframe to the page content script.
+  chrome.runtime.onMessage.addListener((message: { type?: string }, _sender, sendResponse) => {
+    if (message?.type && RELAY_TYPES.has(message.type)) {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([tab]) => {
+        if (tab?.id === undefined) {
+          sendResponse({ ok: false, error: 'no active tab' });
+          return;
+        }
+        chrome.tabs.sendMessage(tab.id, message).then((response) => {
+          sendResponse(response ?? { ok: true });
+        }).catch(() => {
+          sendResponse({ ok: false, error: 'content script unreachable' });
+        });
+      }).catch(() => {
+        sendResponse({ ok: false, error: 'tabs query failed' });
+      });
+      return true; // keep sendResponse channel open for async
+    }
+    return false;
+  });
 }
+
