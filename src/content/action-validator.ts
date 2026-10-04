@@ -93,6 +93,33 @@ export function checkSafetyPolicy(target: ActionTarget, element?: Element | null
       };
     }
 
+    if (tag === 'a' || element.closest('a')) {
+      const anchor = (tag === 'a' ? element : element.closest('a')) as HTMLAnchorElement;
+      const href = anchor.getAttribute('href') ?? '';
+      const trimmedHref = href.trim();
+      const isInternalUiControl =
+        trimmedHref === '' ||
+        trimmedHref.startsWith('#') ||
+        trimmedHref.startsWith('javascript:') ||
+        anchor.getAttribute('role') === 'button' ||
+        anchor.hasAttribute('data-bs-toggle') ||
+        anchor.hasAttribute('aria-expanded');
+
+      if (!isInternalUiControl && (trimmedHref.startsWith('http://') || trimmedHref.startsWith('https://') || trimmedHref.startsWith('/'))) {
+        try {
+          const targetUrl = new URL(trimmedHref, window.location.href);
+          if (targetUrl.origin !== window.location.origin || targetUrl.pathname !== window.location.pathname) {
+            return {
+              safe: false,
+              reason: 'NAVIGATION_RESTRICTED: Navigation away from the current page is blocked during automated auditing.',
+            };
+          }
+        } catch {
+          /* continue */
+        }
+      }
+    }
+
     const ariaLabel = element.getAttribute('aria-label') ?? '';
     const title = element.getAttribute('title') ?? '';
     const elText = element.textContent ?? '';

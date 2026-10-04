@@ -31,7 +31,6 @@ export interface ToggleOverlayMessage {
 
 export type ExtensionMessage = ScanRequestMessage | PingMessage | ToggleOverlayMessage;
 
-// Chrome-restricted pages that can never be scanned.
 export const RESTRICTED_PREFIXES = [
   'chrome://',
   'chrome-extension://',
@@ -40,9 +39,24 @@ export const RESTRICTED_PREFIXES = [
   'view-source:',
   'chrome-search://',
   'devtools://',
+  'data:',
+  'javascript:',
+  'file:',
 ];
 
 export function isScannableUrl(url: string | undefined): boolean {
   if (!url) return false;
-  return !RESTRICTED_PREFIXES.some((p) => url.startsWith(p));
+  const trimmed = url.trim();
+  if (RESTRICTED_PREFIXES.some((p) => trimmed.startsWith(p))) return false;
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'chromewebstore.google.com' || host === 'chrome.google.com') {
+      return false;
+    }
+  } catch {
+    return false;
+  }
+  return true;
 }

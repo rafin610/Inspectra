@@ -61,6 +61,13 @@ export function buildSelector(el: Element): string {
 
 export function isProbablyVisible(el: Element): boolean {
   try {
+    if (
+      el.closest('#inspectra-floating-overlay-host') ||
+      el.closest('#inspectra-minimized-btn') ||
+      el.closest('#inspectra-issue-marker-layer')
+    ) {
+      return false;
+    }
     const htmlEl = el as HTMLElement;
     const style = window.getComputedStyle(htmlEl);
     if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {

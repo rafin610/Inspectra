@@ -99,6 +99,20 @@ export default function App() {
   }, [refreshTab]);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (view === 'settings') {
+          setView('main');
+        } else {
+          void minimizeOverlay();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view]);
+
+  useEffect(() => {
     const onMarkerClick = (message: { type?: string; issueId?: string }) => {
       if (message.type === 'INSPECTRA_ISSUE_MARKER_CLICK' && message.issueId) {
         setSelectedIssueId(message.issueId);

@@ -26,6 +26,10 @@ import {
   summarizeVisuals,
 } from './visibility-scanner';
 
+const winScanner = window as unknown as { __INSPECTRA_SCANNER_LOADED?: boolean };
+if (!winScanner.__INSPECTRA_SCANNER_LOADED) {
+  winScanner.__INSPECTRA_SCANNER_LOADED = true;
+
 function waitForStable(timeoutMs = 2500): Promise<void> {
   return new Promise((resolve) => {
     let settled = false;
@@ -372,6 +376,7 @@ try {
   (window as unknown as { __INSPECTRA_READY?: boolean }).__INSPECTRA_READY = true;
 } catch {
   /* ignore */
+}
 }
 
 export {};
